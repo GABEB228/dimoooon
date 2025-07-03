@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Geometry Dash - Мини игра</title>
+<title>Geometry Dash с меню и разными препятствиями</title>
 <style>
   * {
     box-sizing: border-box;
@@ -11,31 +11,40 @@
   body {
     margin: 0;
     background: #222;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     user-select: none;
+    overflow: hidden;
   }
-  #gameCanvas {
-    background: #1e1e1e;
+  #gameContainer {
+    position: relative;
+    width: 800px;
+    height: 400px;
+    margin: 40px auto;
     border: 3px solid #0ff;
+    border-radius: 10px;
+    background: #1e1e1e;
+  }
+  canvas {
     display: block;
-    margin: 0 auto;
+    background: transparent;
     border-radius: 10px;
   }
-  #score {
+  #score, #level {
     position: absolute;
-    top: 20px;
-    left: 50%;
-    transform: translateX(-50%);
+    top: 10px;
     color: #0ff;
-    font-size: 24px;
+    font-size: 20px;
     font-weight: bold;
     text-shadow: 0 0 5px #0ff;
+    user-select: none;
   }
-  #gameOver {
+  #score {
+    left: 10px;
+  }
+  #level {
+    right: 10px;
+  }
+  #gameOver, #gameWin {
     position: absolute;
     top: 50%;
     left: 50%;
@@ -45,10 +54,16 @@
     font-weight: bold;
     display: none;
     text-shadow: 0 0 10px #f00;
+    text-align: center;
+    user-select: none;
+  }
+  #gameWin {
+    color: #0f0;
+    text-shadow: 0 0 10px #0f0;
   }
   #restartBtn {
     position: absolute;
-    top: 60%;
+    top: 65%;
     left: 50%;
     transform: translateX(-50%);
     padding: 10px 20px;
@@ -61,26 +76,77 @@
     color: #222;
     font-weight: bold;
     box-shadow: 0 0 10px #0ff;
+    user-select: none;
   }
   #restartBtn:hover {
     background: #0cc;
+  }
+  /* Меню выбора уровня */
+  #menu {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 300px;
+    padding: 20px;
+    background: #111;
+    border: 3px solid #0ff;
+    border-radius: 10px;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: #0ff;
+    user-select: none;
+  }
+  #menu h1 {
+    margin-bottom: 20px;
+  }
+  .level-btn {
+    display: block;
+    width: 100%;
+    margin: 10px 0;
+    padding: 12px 0;
+    font-size: 18px;
+    background: #0a0a2a;
+    border: none;
+    border-radius: 6px;
+    color: #0ff;
+    cursor: pointer;
+    box-shadow: 0 0 8px #0ff;
+    transition: background 0.3s;
+  }
+  .level-btn:hover {
+    background: #0ff;
+    color: #222;
   }
 </style>
 </head>
 <body>
 
-<div id="score">Очки: 0</div>
-<div id="gameOver">Игра окончена!</div>
-<button id="restartBtn">Начать заново</button>
-<canvas id="gameCanvas" width="800" height="400"></canvas>
+<div id="gameContainer">
+  <canvas id="gameCanvas" width="800" height="400"></canvas>
+  <div id="score">Очки: 0</div>
+  <div id="level">Уровень: 1</div>
+  <div id="gameOver">Игра окончена!</div>
+  <div id="gameWin">Поздравляем! Вы прошли все уровни!</div>
+  <button id="restartBtn">Начать заново</button>
+  <div id="menu">
+    <h1>Выберите уровень</h1>
+    <button class="level-btn" data-level="0">Уровень 1 (Легкий)</button>
+    <button class="level-btn" data-level="1">Уровень 2 (Средний)</button>
+    <button class="level-btn" data-level="2">Уровень 3 (Сложный)</button>
+  </div>
+</div>
 
 <script>
 (() => {
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
   const scoreEl = document.getElementById('score');
+  const levelEl = document.getElementById('level');
   const gameOverEl = document.getElementById('gameOver');
+  const gameWinEl = document.getElementById('gameWin');
   const restartBtn = document.getElementById('restartBtn');
+  const menu = document.getElementById('menu');
+  const levelButtons = document.querySelectorAll('.level-btn');
 
   const WIDTH = canvas.width;
   const HEIGHT = canvas.height;
@@ -103,15 +169,49 @@
 
   // Препятствия
   const obstacles = [];
-  const obstacleWidth = 50;
-  const obstacleHeight = 50;
-  let obstacleSpeed = 7;
+
+  // Уровни с параметрами и типами препятствий
+  const levels = [
+    {
+      speed: 7,
+      spawnInterval: 90,
+      bgColor: '#1e1e1e',
+      scoreToPass: 10,
+      obstacleTypes: [
+        { width: 50, height: 50, yOffset: 0, color: '#f00' }, // обычный на земле
+      ],
+    },
+    {
+      speed: 9,
+      spawnInterval: 70,
+      bgColor: '#0a0a2a',
+      scoreToPass: 20,
+      obstacleTypes: [
+        { width: 50, height: 50, yOffset: 0, color: '#ff8800' },
+        { width: 30, height: 70, yOffset: -20, color: '#ff5500' }, // высокий
+      ],
+    },
+    {
+      speed: 12,
+      spawnInterval: 50,
+      bgColor: '#2a0a0a',
+      scoreToPass: 30,
+      obstacleTypes: [
+        { width: 50, height: 50, yOffset: 0, color: '#ff0' },
+        { width: 30, height: 70, yOffset: -20, color: '#ffa500' },
+        { width: 70, height: 30, yOffset: 20, color: '#ffff00' }, // низкий широкий
+      ],
+    },
+  ];
+
+  let currentLevel = 0;
+  let obstacleSpeed = 0;
+  let spawnInterval = 0;
   let spawnTimer = 0;
-  let spawnInterval = 90; // кадры между появлением препятствий
 
   // Счёт
   let score = 0;
-  let gameRunning = true;
+  let gameRunning = false;
 
   // Управление прыжком
   function jump() {
@@ -143,14 +243,16 @@
     );
   }
 
-  // Создание нового препятствия
+  // Создание нового препятствия с рандомным типом из текущего уровня
   function createObstacle() {
+    const types = levels[currentLevel].obstacleTypes;
+    const type = types[Math.floor(Math.random() * types.length)];
     const obstacle = {
       x: WIDTH,
-      y: HEIGHT - groundHeight - obstacleHeight,
-      width: obstacleWidth,
-      height: obstacleHeight,
-      color: '#f00',
+      y: HEIGHT - groundHeight - type.height + type.yOffset,
+      width: type.width,
+      height: type.height,
+      color: type.color,
     };
     obstacles.push(obstacle);
   }
@@ -179,10 +281,10 @@
         score++;
         scoreEl.textContent = `Очки: ${score}`;
 
-        // Немного увеличиваем скорость с ростом очков
-        if (score % 5 === 0) {
-          obstacleSpeed += 0.5;
-          if (spawnInterval > 40) spawnInterval -= 2;
+        // Проверка на переход на следующий уровень
+        if (score >= levels[currentLevel].scoreToPass) {
+          nextLevel();
+          return; // чтобы не обновлять дальше в этом кадре
         }
       }
     }
@@ -213,7 +315,7 @@
   // Отрисовка игры
   function draw() {
     // Фон
-    ctx.fillStyle = '#1e1e1e';
+    ctx.fillStyle = levels[currentLevel].bgColor;
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
     // Земля
@@ -247,28 +349,80 @@
     restartBtn.style.display = 'block';
   }
 
-  // Перезапуск игры
-  function restartGame() {
-    // Сброс параметров
+  // Переход на следующий уровень
+  function nextLevel() {
+    currentLevel++;
+    if (currentLevel >= levels.length) {
+      // Все уровни пройдены
+      gameWin();
+      return;
+    }
+    // Сброс параметров для нового уровня
     obstacles.length = 0;
     player.y = HEIGHT - groundHeight - player.height;
     player.velocityY = 0;
     player.onGround = true;
-    obstacleSpeed = 7;
-    spawnInterval = 90;
+    obstacleSpeed = levels[currentLevel].speed;
+    spawnInterval = levels[currentLevel].spawnInterval;
     spawnTimer = 0;
-    score = 0;
     scoreEl.textContent = `Очки: ${score}`;
+    levelEl.textContent = `Уровень: ${currentLevel + 1}`;
+  }
+
+  // Победа
+  function gameWin() {
+    gameRunning = false;
+    gameWinEl.style.display = 'block';
+    restartBtn.style.display = 'block';
+  }
+
+  // Перезапуск игры
+  function restartGame() {
+    currentLevel = 0;
+    score = 0;
+    obstacleSpeed = levels[currentLevel].speed;
+    spawnInterval = levels[currentLevel].spawnInterval;
+    spawnTimer = 0;
+    obstacles.length = 0;
+    player.y = HEIGHT - groundHeight - player.height;
+    player.velocityY = 0;
+    player.onGround = true;
+    scoreEl.textContent = `Очки: ${score}`;
+    levelEl.textContent = `Уровень: ${currentLevel + 1}`;
     gameOverEl.style.display = 'none';
+    gameWinEl.style.display = 'none';
     restartBtn.style.display = 'none';
-    gameRunning = true;
-    gameLoop();
+    menu.style.display = 'block';
+    gameRunning = false;
   }
 
   restartBtn.addEventListener('click', restartGame);
 
-  // Запуск игры
-  gameLoop();
+  // Выбор уровня из меню
+  levelButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentLevel = parseInt(btn.dataset.level);
+      score = 0;
+      obstacles.length = 0;
+      player.y = HEIGHT - groundHeight - player.height;
+      player.velocityY = 0;
+      player.onGround = true;
+      obstacleSpeed = levels[currentLevel].speed;
+      spawnInterval = levels[currentLevel].spawnInterval;
+      spawnTimer = 0;
+      scoreEl.textContent = `Очки: ${score}`;
+      levelEl.textContent = `Уровень: ${currentLevel + 1}`;
+      gameOverEl.style.display = 'none';
+      gameWinEl.style.display = 'none';
+      restartBtn.style.display = 'none';
+      menu.style.display = 'none';
+      gameRunning = true;
+      gameLoop();
+    });
+  });
+
+  // Изначально показываем меню
+  restartGame();
 })();
 </script>
 
