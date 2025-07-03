@@ -1,11 +1,276 @@
-<!DOCTYPE HTML>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <h1 style="color:#ff0000;" align="center">Играть</h1>
-  </head>
-  <body style="background-color:#2d2e43;">
-    <img src="https://ixbt.online/gametech/covers/2025/05/14/nova-filepond-yxK5DJ.jpg?w=948">
-    <h1 align="center" style="color:#ff0000;">RUST</h1>
-  </body>
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Geometry Dash - Мини игра</title>
+<style>
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    background: #222;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    user-select: none;
+  }
+  #gameCanvas {
+    background: #1e1e1e;
+    border: 3px solid #0ff;
+    display: block;
+    margin: 0 auto;
+    border-radius: 10px;
+  }
+  #score {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #0ff;
+    font-size: 24px;
+    font-weight: bold;
+    text-shadow: 0 0 5px #0ff;
+  }
+  #gameOver {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #f00;
+    font-size: 48px;
+    font-weight: bold;
+    display: none;
+    text-shadow: 0 0 10px #f00;
+  }
+  #restartBtn {
+    position: absolute;
+    top: 60%;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 10px 20px;
+    font-size: 20px;
+    background: #0ff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    display: none;
+    color: #222;
+    font-weight: bold;
+    box-shadow: 0 0 10px #0ff;
+  }
+  #restartBtn:hover {
+    background: #0cc;
+  }
+</style>
+</head>
+<body>
+
+<div id="score">Очки: 0</div>
+<div id="gameOver">Игра окончена!</div>
+<button id="restartBtn">Начать заново</button>
+<canvas id="gameCanvas" width="800" height="400"></canvas>
+
+<script>
+(() => {
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  const scoreEl = document.getElementById('score');
+  const gameOverEl = document.getElementById('gameOver');
+  const restartBtn = document.getElementById('restartBtn');
+
+  const WIDTH = canvas.width;
+  const HEIGHT = canvas.height;
+
+  // Игрок
+  const player = {
+    x: 100,
+    y: HEIGHT - 70,
+    width: 50,
+    height: 50,
+    color: '#0ff',
+    velocityY: 0,
+    gravity: 1.2,
+    jumpStrength: 20,
+    onGround: true,
+  };
+
+  // Земля
+  const groundHeight = 50;
+
+  // Препятствия
+  const obstacles = [];
+  const obstacleWidth = 50;
+  const obstacleHeight = 50;
+  let obstacleSpeed = 7;
+  let spawnTimer = 0;
+  let spawnInterval = 90; // кадры между появлением препятствий
+
+  // Счёт
+  let score = 0;
+  let gameRunning = true;
+
+  // Управление прыжком
+  function jump() {
+    if (player.onGround && gameRunning) {
+      player.velocityY = -player.jumpStrength;
+      player.onGround = false;
+    }
+  }
+
+  // Обработчики событий
+  window.addEventListener('keydown', e => {
+    if (e.code === 'Space') {
+      e.preventDefault();
+      jump();
+    }
+  });
+
+  window.addEventListener('mousedown', e => {
+    jump();
+  });
+
+  // Проверка столкновения прямоугольников
+  function isColliding(rect1, rect2) {
+    return (
+      rect1.x < rect2.x + rect2.width &&
+      rect1.x + rect1.width > rect2.x &&
+      rect1.y < rect2.y + rect2.height &&
+      rect1.y + rect1.height > rect2.y
+    );
+  }
+
+  // Создание нового препятствия
+  function createObstacle() {
+    const obstacle = {
+      x: WIDTH,
+      y: HEIGHT - groundHeight - obstacleHeight,
+      width: obstacleWidth,
+      height: obstacleHeight,
+      color: '#f00',
+    };
+    obstacles.push(obstacle);
+  }
+
+  // Обновление состояния игры
+  function update() {
+    if (!gameRunning) return;
+
+    // Прыжок и гравитация
+    player.velocityY += player.gravity;
+    player.y += player.velocityY;
+
+    if (player.y + player.height >= HEIGHT - groundHeight) {
+      player.y = HEIGHT - groundHeight - player.height;
+      player.velocityY = 0;
+      player.onGround = true;
+    }
+
+    // Обновление препятствий
+    for (let i = obstacles.length - 1; i >= 0; i--) {
+      obstacles[i].x -= obstacleSpeed;
+
+      // Удаляем препятствия, вышедшие за экран
+      if (obstacles[i].x + obstacles[i].width < 0) {
+        obstacles.splice(i, 1);
+        score++;
+        scoreEl.textContent = `Очки: ${score}`;
+
+        // Немного увеличиваем скорость с ростом очков
+        if (score % 5 === 0) {
+          obstacleSpeed += 0.5;
+          if (spawnInterval > 40) spawnInterval -= 2;
+        }
+      }
+    }
+
+    // Спавн новых препятствий
+    spawnTimer++;
+    if (spawnTimer >= spawnInterval) {
+      createObstacle();
+      spawnTimer = 0;
+    }
+
+    // Проверка столкновений
+    const playerRect = {
+      x: player.x,
+      y: player.y,
+      width: player.width,
+      height: player.height,
+    };
+
+    for (const obs of obstacles) {
+      if (isColliding(playerRect, obs)) {
+        gameOver();
+        break;
+      }
+    }
+  }
+
+  // Отрисовка игры
+  function draw() {
+    // Фон
+    ctx.fillStyle = '#1e1e1e';
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+    // Земля
+    ctx.fillStyle = '#333';
+    ctx.fillRect(0, HEIGHT - groundHeight, WIDTH, groundHeight);
+
+    // Игрок
+    ctx.fillStyle = player.color;
+    ctx.fillRect(player.x, player.y, player.width, player.height);
+
+    // Препятствия
+    for (const obs of obstacles) {
+      ctx.fillStyle = obs.color;
+      ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+    }
+  }
+
+  // Игровой цикл
+  function gameLoop() {
+    update();
+    draw();
+    if (gameRunning) {
+      requestAnimationFrame(gameLoop);
+    }
+  }
+
+  // Конец игры
+  function gameOver() {
+    gameRunning = false;
+    gameOverEl.style.display = 'block';
+    restartBtn.style.display = 'block';
+  }
+
+  // Перезапуск игры
+  function restartGame() {
+    // Сброс параметров
+    obstacles.length = 0;
+    player.y = HEIGHT - groundHeight - player.height;
+    player.velocityY = 0;
+    player.onGround = true;
+    obstacleSpeed = 7;
+    spawnInterval = 90;
+    spawnTimer = 0;
+    score = 0;
+    scoreEl.textContent = `Очки: ${score}`;
+    gameOverEl.style.display = 'none';
+    restartBtn.style.display = 'none';
+    gameRunning = true;
+    gameLoop();
+  }
+
+  restartBtn.addEventListener('click', restartGame);
+
+  // Запуск игры
+  gameLoop();
+})();
+</script>
+
+</body>
 </html>
